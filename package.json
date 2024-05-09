@@ -1,0 +1,31 @@
+{
+  "name": "dev-serve",
+  "type": "module",
+  "version": "0.9.0",
+  "author": "Joakim L. Christiansen (https://joakimch.github.io)",
+  "license": "MIT",
+  "dependencies": {
+    "jlc-websocket": "^0.9.3",
+    "chokidar": "^3.6.0",
+    "devcert": "^1.2.2",
+    "mime": "^4.0.3"
+  },
+  "scripts": {
+    "postinstall": "node fixDependencyError.js"
+  },
+  "bin": "./dev-serve.js",
+  "repository": "github:JoakimCh/dev-serve",
+  "funding": "https://joakimch.github.io/funding.html",
+  "description": "A simple and efficient HTTP/S server for serving static files, meant to be used during development (with sane defaults).",
+  "keywords": [
+    "http",
+    "https",
+    "static",
+    "server",
+    "livereload",
+    "devcert",
+    "watcher",
+    "dev",
+    "serve"
+  ]
+}
