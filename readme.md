@@ -24,6 +24,8 @@ npx jlc-dev-serve
 
 > (with [npx](https://docs.npmjs.com/cli/v8/commands/npx) it doesn't have to be installed first)
 
+Will serve the files in the current directory.
+
 ## Configuration
 
 It can be configured by setting environment variables. E.g. like this:
