@@ -19,7 +19,7 @@ process.on('uncaughtException', (error, origin) => {
   process.exit(1)
 })
 
-log('💾 Starting dev-serve...')
+log('💾 Starting jlc-dev-serve...')
 
 const config = {
   host: process.env.PUBLIC ? '::' : process.env.HOST || 'localhost',

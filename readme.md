@@ -1,5 +1,5 @@
 
-# dev-serve
+# jlc-dev-serve
 
 A simple and efficient HTTP/S server for serving static files, meant to be used during development (with sane defaults).
 
@@ -19,7 +19,7 @@ In this project I'll try keep it **simple** and only include the most needed fea
 ## Usage
 
 ```bash
-npx dev-serve
+npx jlc-dev-serve
 ```
 
 > (with [npx](https://docs.npmjs.com/cli/v8/commands/npx) it doesn't have to be installed first)
@@ -28,7 +28,7 @@ npx dev-serve
 
 It can be configured by setting environment variables. E.g. like this:
 ```bash
-HTTP=1 HOST=0.0.0.0 PORT=1337 npx dev-serve
+HTTP=1 HOST=0.0.0.0 PORT=1337 npx jlc-dev-serve
 ```
 
 Environment variables (all are optional):

@@ -1,5 +1,5 @@
 {
-  "name": "dev-serve",
+  "name": "jlc-dev-serve",
   "type": "module",
   "version": "0.9.0",
   "author": "Joakim L. Christiansen (https://joakimch.github.io)",
@@ -13,8 +13,8 @@
   "scripts": {
     "postinstall": "node fixDependencyError.js"
   },
-  "bin": "./dev-serve.js",
-  "repository": "github:JoakimCh/dev-serve",
+  "bin": "./jlc-dev-serve.js",
+  "repository": "github:JoakimCh/jlc-dev-serve",
   "funding": "https://joakimch.github.io/funding.html",
   "description": "A simple and efficient HTTP/S server for serving static files, meant to be used during development (with sane defaults).",
   "keywords": [
@@ -25,6 +25,7 @@
     "livereload",
     "devcert",
     "watcher",
+    "jlc",
     "dev",
     "serve"
   ]
