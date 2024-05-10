@@ -2,7 +2,6 @@
 
 import * as fs from 'node:fs'
 
-console.log('fixing dependency')
 try {
   const path = 'node_modules/is-valid-domain/index.js'
   let script = fs.readFileSync(path, 'utf-8')

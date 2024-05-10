@@ -26,6 +26,15 @@ npx jlc-dev-serve
 
 Will serve the files in the current directory.
 
+### Note
+
+It seems that when using `npx` you'll get the warning ```The `punycode` module is deprecated```. I have a script to fix the dependency which cause this warning, but that script is only executed on the installation of my package.
+
+Hence to get rid of that warning just install my package globally like this:
+```bash
+npm install -g jlc-dev-serve
+```
+
 ## Configuration
 
 It can be configured by setting environment variables. E.g. like this:
