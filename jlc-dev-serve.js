@@ -35,6 +35,9 @@ const config = {
 // get rid of undefined values and print the config
 log('⚙️ Current configuration:', JSON.parse(JSON.stringify(config))) // alt. 🪛
 // check for insane config
+if (process.env.PUBLIC && process.env.HOST) {
+  throw Error(`Can't set both PUBLIC and HOST, because PUBLIC will set the HOST for you.`)
+}
 if (config.http && config.cert) {
   throw Error(`Can't set both HTTP and CERT (a certificate is only used with HTTPS servers).`)
 }
