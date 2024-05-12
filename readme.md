@@ -13,6 +13,7 @@ In this project I'll try keep it **simple** and only include the most needed fea
 * Directory watcher ([chokidar](https://www.npmjs.com/package/chokidar)) with [LiveReload](https://chromewebstore.google.com/detail/jnihajbhpnppcggbcgedagnkighmdlei) support.
 * Etag support (utilizes browser cache when possible).
 * Compression support (gzip and brotli).
+* Directory listing (can be turned off).
 * MIME types support through [mime](https://www.npmjs.com/package/mime).
 * Very small amount of code written so anyone can understand it!
 
@@ -54,6 +55,8 @@ Environment variables (all are optional):
 | PUBLIC | A shortcut to setting the host to `::`. |
 | REDIRECT | Redirect any HTTP connections to this port to the HTTPS server. |
 | COMPRESSION | Whether to support BR or GZIP compression. |
+| IGNORE_INDEX | Ignore any `index.html` file when browsing `path/`. |
+| NO_DIRECTORY_LISTING | When browsing `path/` do NOT list its contents. |
 | NO_LIVE_RELOAD | Set to NOT start the LiveReload server. |
 
 ## The End

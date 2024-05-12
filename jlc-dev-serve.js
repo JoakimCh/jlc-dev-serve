@@ -30,7 +30,9 @@ const config = {
   http: envSwitch(process.env.HTTP),
   redirect: envNumber(process.env.REDIRECT),
   compression: envSwitch(process.env.COMPRESSION),
+  ignore_index: envSwitch(process.env.IGNORE_INDEX),
   no_live_reload: envSwitch(process.env.NO_LIVE_RELOAD),
+  no_directory_listing: envSwitch(process.env.NO_DIRECTORY_LISTING)
 }
 // get rid of undefined values and print the config
 log('⚙️ Current configuration:', JSON.parse(JSON.stringify(config))) // alt. 🪛
@@ -185,7 +187,9 @@ async function requestListener(request, response) {
   try { // so no failure can crash the server
     const url = new URL(request.url, 'http:\\'+request.headers.host)
     urlPath = decodeURIComponent(url.pathname)
-    if (urlPath.endsWith('/')) urlPath += 'index.html'
+    if (!config.ignore_index && urlPath.endsWith('/') && filesServed.has(urlPath+'index.html')) {
+      urlPath += 'index.html'
+    }
     if (filesServed.has(urlPath)) {
       const filePath = currentDirectory + urlPath
       const stat = fs.statSync(filePath)
@@ -223,6 +227,8 @@ async function requestListener(request, response) {
           }
         }
       }
+    } else if (!config.NO_DIRECTORY_LISTING && urlPath.endsWith('/')) {
+      directoryListing(urlPath, response)
     } else {
       response.statusCode = 404
       response.end()
@@ -313,4 +319,35 @@ function getListeningAddresses(host) {
     }
   }
   return IPs
+}
+
+function directoryListing(urlPath, response) {
+  response.statusCode = 200
+  response.setHeader('Content-Type', 'text/html; charset=utf-8')
+  const subDirLevel = urlPath.split('/').length
+  const files = new Set()
+  const directories = new Set()
+  for (const filePath of filesServed.keys()) {
+    const fileSubDirLevel = filePath.split('/').length
+    if (filePath.startsWith(urlPath)) {
+      if (fileSubDirLevel == subDirLevel) {
+        files.add(filePath.split('/')[subDirLevel-1])
+      } else if (fileSubDirLevel >= subDirLevel) {
+        directories.add(filePath.split('/')[subDirLevel-1]+'/')
+      }
+    }
+  }
+  let html = `<h1>Directory listing for: ${urlPath}</h1>\n`
+  html += '<nav><ul>\n'
+  if (urlPath != '/') {
+    html += `<li>🔙<a href="..">[parent directory]</a></li>\n`
+  }
+  for (const dir of directories) {
+    html += `<li>📁<a href="${urlPath+dir}">${dir}</a></li>\n`
+  }
+  for (const dir of files) {
+    html += `<li>🗒️<a href="${urlPath+dir}">${dir}</a></li>\n`
+  }
+  html += '</ul></nav>\n'
+  response.end(html)
 }
