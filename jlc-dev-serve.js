@@ -27,10 +27,12 @@ const config = {
   cert: process.env.CERT,
   key:  process.env.KEY,
   pass: process.env.PASS,
+  prefix: process.env.PREFIX || '',
   http: envSwitch(process.env.HTTP),
   redirect: envNumber(process.env.REDIRECT),
   compression: envSwitch(process.env.COMPRESSION),
   ignore_index: envSwitch(process.env.IGNORE_INDEX),
+  js_bootstrap: process.env.JS_BOOTSTRAP,
   no_live_reload: envSwitch(process.env.NO_LIVE_RELOAD),
   no_directory_listing: envSwitch(process.env.NO_DIRECTORY_LISTING)
 }
@@ -55,6 +57,40 @@ if (config.cert && !config.key) {
 if (!config.cert && config.pass) {
   throw Error(`If using PASS you must also supply CERT and KEY.`)
 }
+if (config.prefix && (config.prefix.startsWith('/') || config.prefix.endsWith('/'))) {
+  throw Error(`A PREFIX must never start or end with /.`)
+}
+if (config.js_bootstrap) {
+  const scripts = []
+  let header, isModule = false
+  if (envSwitch(config.js_bootstrap)) { // if `true` or `1`
+    // all is good
+  } else {
+    const errorMsg = `If JS_BOOTSTRAP differs from "1" or "true" then it must follow a special syntax. Check the documentation at: https://github.com/JoakimCh/jlc-dev-serve`
+    const parts = config.js_bootstrap.split('|')
+    for (const part of parts) {
+      if (part == 'module') {
+        if (isModule) throw Error(errorMsg)
+        isModule = true
+      } else {
+        const url = new URL(part, 'http://whatever')
+        if (url.pathname.endsWith('.js')) {
+          scripts.push({isModule, src: part})
+          isModule = false
+        } else {
+          throw Error(errorMsg)
+        }
+      }
+    }
+  }
+  header = `<!doctype html>\n`
+    +`<meta charset="utf-8">\n`
+    +`<title>index</title>\n`
+  for (const {src, isModule} of scripts) {
+    header += `<script ${isModule ? `type="module"` : ''} src="${src}"></script>\n`
+  }
+  config.js_bootstrap = {header, isModule}
+}
 
 let isPublic
 /** (doesn't allow tricks to escape further up in the filesystem) */
@@ -73,11 +109,15 @@ watcher.once('ready', async () => {
   server.listen(config.port, config.host)
   if (!config.no_live_reload) {
     log(`🔁 Starting the LiveReload server...`)
-    liveReload.start()
+    liveReload.start(config)
   }
 })
 watcher.on('all', (event, path) => {
-  path = '/'+path
+  if (config.prefix) {
+    path = `/${config.prefix}/${path}`
+  } else {
+    path = '/'+path
+  }
   switch (event) {
     case 'add':
       // when watching '.' (CWD) it returns a path relative to it
@@ -108,8 +148,9 @@ function onceListening() {
     case '127.0.0.1':
       address = 'localhost'
   }
+  const prefix = config.prefix ? config.prefix+'/' : ''
   if (address == 'localhost') {
-    log(`✅ Ready for connections on: ${config.http ? 'http' : 'https'}://${address}:${server.address().port}`)
+    log(`✅ Ready for connections on: ${config.http ? 'http' : 'https'}://${address}:${server.address().port}/${prefix}`)
     log(`🔒 (no access allowed outside of your computer) 🔒`)
   } else {
     isPublic = true
@@ -117,7 +158,7 @@ function onceListening() {
     console.group()
     const listeningAddresses = getListeningAddresses(address)
     for (const address of listeningAddresses) {
-      log(`${config.http ? 'http' : 'https'}://${address}:${server.address().port}`)
+      log(`${config.http ? 'http' : 'https'}://${address}:${server.address().port}/${prefix}`)
     }
     console.groupEnd()
     log(`🔓🛑⚠️ WARNING: THE SERVED FILES ARE AVAILABLE TO ANY OTHER COMPUTER WHICH CAN ACCESS THOSE ADDRESSES! ⚠️🛑🔓`)
@@ -187,48 +228,31 @@ async function requestListener(request, response) {
   try { // so no failure can crash the server
     const url = new URL(request.url, 'http:\\'+request.headers.host)
     urlPath = decodeURIComponent(url.pathname)
-    if (!config.ignore_index && urlPath.endsWith('/') && filesServed.has(urlPath+'index.html')) {
+    if (config.js_bootstrap && urlPath.endsWith('/') 
+    && (filesServed.has(urlPath+'index.js') || filesServed.has(urlPath+'index.mjs'))) {
+      const extIsMjs = filesServed.has(urlPath+'index.mjs')
+      if (extIsMjs) {
+        urlPath += 'index.mjs'
+      } else {
+        urlPath += 'index.js'
+      }
+      let {header, isModule} = config.js_bootstrap
+      if (extIsMjs) isModule = true
+      const html = header + `<script ${isModule ? `type="module" ` : ''}src="${urlPath}"></script>`
+      // response.statusCode = 200
+      response.setHeader('Content-Type', 'text/html')
+      response.end(html)
+      urlPath = null // to not serve anything else
+    } else if (!config.ignore_index && urlPath.endsWith('/') && filesServed.has(urlPath+'index.html')) {
       urlPath += 'index.html'
     }
-    if (filesServed.has(urlPath)) {
-      const filePath = currentDirectory + urlPath
-      const stat = fs.statSync(filePath)
-      const eTag = stat.mtimeMs.toString(36)
-      if (request.headers['if-none-match'] == eTag) {
-        response.statusCode = 304 // Not Modified
-        response.end() // browser cache is then used
-      } else {
-        response.statusCode = 200
-        response.setHeader('Etag', eTag)
-        response.setHeader('Content-Type', mime.getType(urlPath) || 'application/octet-stream')
-        if (request.method == 'HEAD') {
-          response.end()
-        } else {
-          let encoder, contentEncoding
-          const accept = request.headers['accept-encoding']
-          if (config.compression && accept) {
-            const accepts = accept.split(', ')
-            if (accepts.includes('br')) {
-              contentEncoding = 'br'
-              encoder = zlib.createBrotliCompress({params: {
-                [zlib.constants.BROTLI_PARAM_MODE]: zlib.constants.BROTLI_MODE_TEXT,
-                [zlib.constants.BROTLI_PARAM_SIZE_HINT]: stat.size
-              }})
-            } else if (accepts.includes('gzip')) {
-              contentEncoding = 'gzip'
-              encoder = zlib.createGzip({level: 9})
-            }
-          }
-          if (contentEncoding) { // if compression
-            response.setHeader('Content-Encoding', contentEncoding)
-            await pipeline(fs.createReadStream(filePath), encoder, response)
-          } else {
-            await pipeline(fs.createReadStream(filePath), response)
-          }
-        }
-      }
-    } else if (!config.NO_DIRECTORY_LISTING && urlPath.endsWith('/')) {
+    if (urlPath == null) {
+      // then do nothing more
+    } else if (urlPath.endsWith('/') && !config.NO_DIRECTORY_LISTING) {
       directoryListing(urlPath, response)
+    } else if (filesServed.has(urlPath)) {
+      const filePath = currentDirectory + (!config.prefix ? urlPath : urlPath.slice(config.prefix.length+1))
+      serveFile(request, response, filePath, config)
     } else {
       response.statusCode = 404
       response.end()
@@ -239,6 +263,44 @@ async function requestListener(request, response) {
     response.setHeader('Content-Type', 'text/html')
     response.end(''+error)
     log(`${getClock()} ${isPublic ? request.socket.remoteAddress : '127.0.0.1'} ${response.statusCode} ${request.method} ${decodeURIComponent(request.url)} (${error})`)
+  }
+}
+
+async function serveFile(request, response, filePath, config) {
+  const stat = fs.statSync(filePath)
+  const eTag = stat.mtimeMs.toString(36)
+  if (request.headers['if-none-match'] == eTag) {
+    response.statusCode = 304 // Not Modified
+    response.end() // browser cache is then used
+  } else {
+    // response.statusCode = 200
+    response.setHeader('Etag', eTag)
+    response.setHeader('Content-Type', mime.getType(filePath) || 'application/octet-stream')
+    if (request.method == 'HEAD') {
+      response.end()
+    } else {
+      let encoder, contentEncoding
+      const accept = request.headers['accept-encoding']
+      if (config.compression && accept) {
+        const accepts = accept.split(', ')
+        if (accepts.includes('br')) {
+          contentEncoding = 'br'
+          encoder = zlib.createBrotliCompress({params: {
+            [zlib.constants.BROTLI_PARAM_MODE]: zlib.constants.BROTLI_MODE_TEXT,
+            [zlib.constants.BROTLI_PARAM_SIZE_HINT]: stat.size
+          }})
+        } else if (accepts.includes('gzip')) {
+          contentEncoding = 'gzip'
+          encoder = zlib.createGzip({level: 9})
+        }
+      }
+      if (contentEncoding) { // if compression
+        response.setHeader('Content-Encoding', contentEncoding)
+        await pipeline(fs.createReadStream(filePath), encoder, response)
+      } else {
+        await pipeline(fs.createReadStream(filePath), response)
+      }
+    }
   }
 }
 
@@ -322,8 +384,8 @@ function getListeningAddresses(host) {
 }
 
 function directoryListing(urlPath, response) {
-  response.statusCode = 200
-  response.setHeader('Content-Type', 'text/html; charset=utf-8')
+  // response.statusCode = 200
+  response.setHeader('Content-Type', 'text/html')
   const subDirLevel = urlPath.split('/').length
   const files = new Set()
   const directories = new Set()
@@ -337,8 +399,12 @@ function directoryListing(urlPath, response) {
       }
     }
   }
-  let html = `<h1>Directory listing for: ${urlPath}</h1>\n`
-  html += '<nav><ul>\n'
+  let html = `<!doctype html>\n`
+  +`<meta charset="utf-8">\n`
+  +`<title>Directory listing</title>\n`
+  +`<style>:root {color-scheme: light dark}</style>\n`
+  +`<h3>Directory listing for: ${urlPath}</h3>\n`
+  +'<nav><ul>\n'
   if (urlPath != '/') {
     html += `<li>🔙<a href="..">[parent directory]</a></li>\n`
   }

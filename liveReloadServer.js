@@ -22,17 +22,20 @@ https://chrome.google.com/webstore/detail/remotelivereload/jlppknnillhjgiengoiga
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as http from 'node:http'
+import * as zlib from 'node:zlib'
+import {pipeline} from 'node:stream/promises'
 import {fileURLToPath} from 'node:url'
 import {WebSocket} from 'jlc-websocket'
 const log = console.log
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url))
 const clientScriptPath = path.join(moduleDirectory, 'liveReloadClient.min.js')
+const clientScriptStat = fs.statSync(clientScriptPath)
 let server
 
-export function start() {
+export function start(config) {
   if (!server) {
-    server = http.createServer((request, response) => {
+    server = http.createServer(async (request, response) => {
       if (request.url.startsWith('/livereload.js')) {
         if (request.headers['if-none-match'] == 'livereload') {
           response.statusCode = 304 // Not Modified
@@ -44,7 +47,27 @@ export function start() {
         if (request.method == 'HEAD') {
           return response.end()
         }
-        fs.createReadStream(clientScriptPath).pipe(response)
+        let encoder, contentEncoding
+        const accept = request.headers['accept-encoding']
+        if (config.compression && accept) {
+          const accepts = accept.split(', ')
+          if (accepts.includes('br')) {
+            contentEncoding = 'br'
+            encoder = zlib.createBrotliCompress({params: {
+              [zlib.constants.BROTLI_PARAM_MODE]: zlib.constants.BROTLI_MODE_TEXT,
+              [zlib.constants.BROTLI_PARAM_SIZE_HINT]: clientScriptStat.size
+            }})
+          } else if (accepts.includes('gzip')) {
+            contentEncoding = 'gzip'
+            encoder = zlib.createGzip({level: 9})
+          }
+        }
+        if (contentEncoding) { // if compression
+          response.setHeader('Content-Encoding', contentEncoding)
+          await pipeline(fs.createReadStream(clientScriptPath), encoder, response)
+        } else {
+          await pipeline(fs.createReadStream(clientScriptPath), response)
+        }
       } else {
         response.statusCode = 404
         response.end()
