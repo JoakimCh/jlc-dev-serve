@@ -15,8 +15,12 @@ const log = console.log
 
 // so errors will look nicer (skips "double reporting")
 process.on('uncaughtException', (error, origin) => {
-  log('🤯', error)
-  process.exit(1)
+  if (error.code == 'ERR_STREAM_PREMATURE_CLOSE') {
+    log('🤯', 'ERR_STREAM_PREMATURE_CLOSE happened (but is impossible to catch), so we continue...')
+  } else {
+    log('🤯', error)
+    process.exit(1)
+  }
 })
 
 log('💾 Starting jlc-dev-serve...')
@@ -85,6 +89,7 @@ if (config.js_bootstrap) {
   }
   header = `<!doctype html>\n`
     +`<meta charset="utf-8">\n`
+    +`<meta name="viewport" content="width=device-width, initial-scale=1.0">\n`
     +`<title>index</title>\n`
   for (const {src, isModule} of scripts) {
     header += `<script ${isModule ? `type="module"` : ''} src="${src}"></script>\n`
@@ -225,11 +230,16 @@ async function changePortIfNeeded() {
 
 async function requestListener(request, response) {
   let urlPath
+  response.on('error', error => {
+    log('🤯 response error', error)
+  })
   try { // so no failure can crash the server
     const url = new URL(request.url, 'http:\\'+request.headers.host)
     urlPath = decodeURIComponent(url.pathname)
-    if (config.js_bootstrap && urlPath.endsWith('/') 
-    && (filesServed.has(urlPath+'index.js') || filesServed.has(urlPath+'index.mjs'))) {
+    if (!config.ignore_index && urlPath.endsWith('/') && filesServed.has(urlPath+'index.html')) {
+      urlPath += 'index.html'
+    } else if (config.js_bootstrap && urlPath.endsWith('/') 
+      && (filesServed.has(urlPath+'index.js') || filesServed.has(urlPath+'index.mjs'))) {
       const extIsMjs = filesServed.has(urlPath+'index.mjs')
       if (extIsMjs) {
         urlPath += 'index.mjs'
@@ -243,8 +253,6 @@ async function requestListener(request, response) {
       response.setHeader('Content-Type', 'text/html')
       response.end(html)
       urlPath = null // to not serve anything else
-    } else if (!config.ignore_index && urlPath.endsWith('/') && filesServed.has(urlPath+'index.html')) {
-      urlPath += 'index.html'
     }
     if (urlPath == null) {
       // then do nothing more
@@ -252,16 +260,20 @@ async function requestListener(request, response) {
       directoryListing(urlPath, response)
     } else if (filesServed.has(urlPath)) {
       const filePath = currentDirectory + (!config.prefix ? urlPath : urlPath.slice(config.prefix.length+1))
-      serveFile(request, response, filePath, config)
+      await serveFile(request, response, filePath, config)
     } else {
       response.statusCode = 404
       response.end()
     }
     log(`${getClock()} ${isPublic ? request.socket.remoteAddress : '127.0.0.1'} ${response.statusCode} ${request.method} ${decodeURIComponent(request.url)}`)
   } catch (error) {
-    response.statusCode = 500
-    response.setHeader('Content-Type', 'text/html')
-    response.end(''+error)
+    try {
+      response.statusCode = 500
+      response.setHeader('Content-Type', 'text/html')
+      response.end(''+error)
+    } catch (error) {
+      log('🤯 error response error', error)
+    }
     log(`${getClock()} ${isPublic ? request.socket.remoteAddress : '127.0.0.1'} ${response.statusCode} ${request.method} ${decodeURIComponent(request.url)} (${error})`)
   }
 }
@@ -401,6 +413,7 @@ function directoryListing(urlPath, response) {
   }
   let html = `<!doctype html>\n`
   +`<meta charset="utf-8">\n`
+  +`<meta name="viewport" content="width=device-width, initial-scale=1.0">\n`
   +`<title>Directory listing</title>\n`
   +`<style>:root {color-scheme: light dark}</style>\n`
   +`<h3>Directory listing for: ${urlPath}</h3>\n`
