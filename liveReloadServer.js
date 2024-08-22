@@ -33,7 +33,7 @@ const clientScriptPath = path.join(moduleDirectory, 'liveReloadClient.min.js')
 const clientScriptStat = fs.statSync(clientScriptPath)
 let server
 
-export function start(config) {
+export async function start(config) {
   if (!server) {
     server = http.createServer(async (request, response) => {
       if (request.url.startsWith('/livereload.js')) {
@@ -82,7 +82,16 @@ export function start(config) {
       }
     })
   }
-  server.listen(35729)
+  try {
+    await new Promise((resolve, reject) => {
+      server.on('listening', resolve)
+      server.on('error', reject)
+      server.listen(35729)
+    })
+  } catch (error) {
+    log(`⚠️ LiveReload server not started: `+error)
+    server.close()
+  }
 }
 
 export function reportChange(path) {
