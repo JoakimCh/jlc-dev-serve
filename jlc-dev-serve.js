@@ -10,7 +10,11 @@ import * as http from 'node:http'
 import * as https from 'node:https'
 import * as chokidar from 'chokidar'
 import * as liveReload from './liveReloadServer.js'
+import {sep, relative} from 'node:path'
 import {pipeline} from 'node:stream/promises'
+import {createRequire} from 'node:module'
+const require = createRequire(import.meta.url)
+const {version} = require('./package.json')
 const log = console.log
 
 // so errors will look nicer (skips "double reporting")
@@ -23,7 +27,7 @@ process.on('uncaughtException', (error, origin) => {
   }
 })
 
-log('💾 Starting jlc-dev-serve...')
+log(`💾 Starting jlc-dev-serve v${version}...`)
 
 const config = {
   host: process.env.PUBLIC ? '::' : process.env.HOST || 'localhost',
@@ -37,6 +41,7 @@ const config = {
   compression: envSwitch(process.env.COMPRESSION),
   ignore_index: envSwitch(process.env.IGNORE_INDEX),
   js_bootstrap: process.env.JS_BOOTSTRAP,
+  js_bootstrap_custom: process.env.JS_BOOTSTRAP_CUSTOM,
   no_live_reload: envSwitch(process.env.NO_LIVE_RELOAD),
   no_directory_listing: envSwitch(process.env.NO_DIRECTORY_LISTING)
 }
@@ -96,6 +101,27 @@ if (config.js_bootstrap) {
   }
   config.js_bootstrap = {header, isModule}
 }
+if (config.js_bootstrap_custom) {
+  const parts = config.js_bootstrap_custom.split('|')
+  config.js_bootstrap_custom = new Map()
+  let isModule
+  for (const part of parts) {
+    if (part == 'module') {
+      isModule = true
+    } else {
+      let filePath = relative(process.cwd(), part)
+      if (!fs.existsSync(filePath)) {
+        throw Error(`Path doesn't exist: ${filePath}`)
+      }
+      if (process.platform == 'win32') {
+        filePath.replace('\\', '/')
+      }
+      filePath = '/' + filePath
+      config.js_bootstrap_custom.set(withoutExt(filePath), {filePath, isModule})
+      isModule = false
+    }
+  }
+}
 
 let isPublic
 /** (doesn't allow tricks to escape further up in the filesystem) */
@@ -107,7 +133,7 @@ server.on('tlsClientError', (error, socket) => {
   log(`${getClock()} ${socket.remoteAddress} failed setting up a secure connection, maybe it tried to connect using the HTTP protocol.`)
 })
 log(`🔍 Scanning for files to serve in the "current directory" which is:\n   ${currentDirectory}`)
-const watcher = chokidar.watch('.', {disableGlobbing: true})
+const watcher = chokidar.watch('.')
 watcher.once('ready', async () => { 
   log('🗃️',  filesServed.size, `files found, starting the ${config.http ? 'HTTP' : 'HTTPS'} server...`)
   await changePortIfNeeded()
@@ -191,7 +217,7 @@ async function createServer() {
         throw Error(`Please supply your own certificate (CERT and KEY) for ${config.host}, since a "localhost" certificate will not work with it.`)
       }
       log('🪪 Getting a certificate for "localhost" (might require admin-privileges on first run)...')
-      const devcert = await import('devcert')
+      const devcert = await import('@expo/devcert')
       const result = await devcert.certificateFor('localhost')
       key = result.key
       cert = result.cert
@@ -253,7 +279,18 @@ async function requestListener(request, response) {
       response.setHeader('Content-Type', 'text/html')
       response.end(html)
       urlPath = null // to not serve anything else
+    } else if (config.js_bootstrap_custom?.has(urlPath)) {
+      const {filePath, isModule} = config.js_bootstrap_custom.get(urlPath)
+      const html = `<!doctype html>\n`
+        +`<meta charset="utf-8">\n`
+        +`<meta name="viewport" content="width=device-width, initial-scale=1.0">\n`
+        +`<title>${urlPath}</title>\n`
+        +`<script ${isModule ? `type="module" ` : ''}src="${filePath}"></script>`
+      response.setHeader('Content-Type', 'text/html')
+      response.end(html)
+      urlPath = null // to not serve anything else
     }
+    
     if (urlPath == null) {
       // then do nothing more
     } else if (urlPath.endsWith('/') && !config.NO_DIRECTORY_LISTING) {
@@ -429,4 +466,15 @@ function directoryListing(urlPath, response) {
   }
   html += '</ul></nav>\n'
   response.end(html)
+}
+
+/** Returns the path without the extension part. */
+function withoutExt(path = '') {
+  const lastSep = path.lastIndexOf(sep)
+  const lastDot = path.lastIndexOf('.')
+  if (lastDot > lastSep) {
+    return path.slice(0, lastDot)
+  } else {
+    return path
+  }
 }

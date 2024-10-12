@@ -1,17 +1,14 @@
 {
   "name": "jlc-dev-serve",
   "type": "module",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "author": "Joakim L. Christiansen (https://joakimch.github.io)",
   "license": "MIT",
   "dependencies": {
     "jlc-websocket": "^0.9.3",
-    "chokidar": "^3.6.0",
-    "devcert": "^1.2.2",
-    "mime": "^4.0.3"
-  },
-  "scripts": {
-    "postinstall": "node fixDependencyError.js"
+    "chokidar": "^4.0.1",
+    "@expo/devcert": "^1.1.4",
+    "mime": "^4.0.4"
   },
   "bin": "./jlc-dev-serve.js",
   "repository": "github:JoakimCh/jlc-dev-serve",
