@@ -133,7 +133,9 @@ server.on('tlsClientError', (error, socket) => {
   log(`${getClock()} ${socket.remoteAddress} failed setting up a secure connection, maybe it tried to connect using the HTTP protocol.`)
 })
 log(`🔍 Scanning for files to serve in the "current directory" which is:\n   ${currentDirectory}`)
-const watcher = chokidar.watch('.')
+const watcher = chokidar.watch('.', {
+  ignored: path => path.startsWith('.')
+})
 watcher.once('ready', async () => { 
   log('🗃️',  filesServed.size, `files found, starting the ${config.http ? 'HTTP' : 'HTTPS'} server...`)
   await changePortIfNeeded()
