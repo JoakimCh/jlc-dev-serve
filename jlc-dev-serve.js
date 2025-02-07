@@ -10,7 +10,7 @@ import * as http from 'node:http'
 import * as https from 'node:https'
 import * as chokidar from 'chokidar'
 import * as liveReload from './liveReloadServer.js'
-import {sep, relative} from 'node:path'
+import {sep, relative, basename} from 'node:path'
 import {pipeline} from 'node:stream/promises'
 import {createRequire} from 'node:module'
 const require = createRequire(import.meta.url)
@@ -134,7 +134,7 @@ server.on('tlsClientError', (error, socket) => {
 })
 log(`🔍 Scanning for files to serve in the "current directory" which is:\n   ${currentDirectory}`)
 const watcher = chokidar.watch('.', {
-  ignored: path => path.startsWith('.')
+  ignored: path => basename(path).startsWith('.')
 })
 watcher.once('ready', async () => { 
   log('🗃️',  filesServed.size, `files found, starting the ${config.http ? 'HTTP' : 'HTTPS'} server...`)
