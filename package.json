@@ -1,7 +1,7 @@
 {
   "name": "jlc-dev-serve",
   "type": "module",
-  "version": "0.9.11",
+  "version": "0.9.12",
   "author": "Joakim L. Christiansen (https://joakimch.github.io)",
   "license": "MIT",
   "dependencies": {

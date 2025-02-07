@@ -134,7 +134,10 @@ server.on('tlsClientError', (error, socket) => {
 })
 log(`🔍 Scanning for files to serve in the "current directory" which is:\n   ${currentDirectory}`)
 const watcher = chokidar.watch('.', {
-  ignored: path => basename(path).startsWith('.')
+  ignored: (path) => {
+    if (path == '.') return false
+    return basename(path).startsWith('.')
+  }
 })
 watcher.once('ready', async () => { 
   log('🗃️',  filesServed.size, `files found, starting the ${config.http ? 'HTTP' : 'HTTPS'} server...`)
